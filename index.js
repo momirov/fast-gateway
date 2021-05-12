@@ -104,7 +104,10 @@ const handler = (route, proxy, proxyHandler) => async (req, res, next) => {
       }, route.hooks)
 
       proxyHandler(req, res, req.url, proxy, proxyOpts)
+    } else {
+      next();
     }
+    
   } catch (err) {
     return next(err)
   }
