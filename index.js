@@ -2,24 +2,27 @@
 
 /* eslint-disable no-useless-call */
 
-const proxyFactory = require('./lib/proxy-factory')
+const defaultProxyFactory = require('./lib/proxy-factory')
 const restana = require('restana')
 const defaultProxyHandler = (req, res, url, proxy, proxyOpts) => proxy(req, res, url, proxyOpts)
 const DEFAULT_METHODS = require('restana/libs/methods').filter(method => method !== 'all')
 const send = require('@polka/send-type')
 const PROXY_TYPES = ['http', 'lambda']
+const registerWebSocketRoutes = require('./lib/ws-proxy')
 
 const gateway = (opts) => {
+  const proxyFactory = opts.proxyFactory || defaultProxyFactory
+
   opts = Object.assign({
     middlewares: [],
     pathRegex: '/*'
   }, opts)
 
-  const server = opts.server || restana(opts.restana)
+  const router = opts.server || restana(opts.restana)
 
   // registering global middlewares
   opts.middlewares.forEach(middleware => {
-    server.use(middleware)
+    router.use(middleware)
   })
 
   // registering services.json
@@ -27,12 +30,27 @@ const gateway = (opts) => {
     prefix: route.prefix,
     docs: route.docs
   }))
-  server.get('/services.json', (req, res) => {
+  router.get('/services.json', (req, res) => {
     send(res, 200, services)
   })
 
-  // processing routes
-  opts.routes.forEach(route => {
+  // processing websocket routes
+  const wsRoutes = opts.routes.filter(route => route.proxyType === 'websocket')
+  if (wsRoutes.length) {
+    if (typeof router.getServer !== 'function') {
+      throw new Error(
+        'Unable to retrieve the HTTP server instance. ' +
+        'If you are not using restana, make sure to provide an "app.getServer()" alternative method!'
+      )
+    }
+    registerWebSocketRoutes({
+      routes: wsRoutes,
+      server: router.getServer()
+    })
+  }
+
+  // processing non-websocket routes
+  opts.routes.filter(route => route.proxyType !== 'websocket').forEach(route => {
     if (undefined === route.prefixRewrite) {
       route.prefixRewrite = ''
     }
@@ -80,13 +98,13 @@ const gateway = (opts) => {
 
     methods.forEach(method => {
       method = method.toLowerCase()
-      if (server[method]) {
-        server[method].apply(server, args)
+      if (router[method]) {
+        router[method].apply(router, args)
       }
     })
   })
 
-  return server
+  return router
 }
 
 const handler = (route, proxy, proxyHandler) => async (req, res, next) => {
@@ -100,7 +118,7 @@ const handler = (route, proxy, proxyHandler) => async (req, res, next) => {
         request: {
           timeout: req.timeout || route.timeout
         },
-        queryString: req.query
+        queryString: route.disableQsOverwrite ? null : req.query
       }, route.hooks)
 
       proxyHandler(req, res, req.url, proxy, proxyOpts)

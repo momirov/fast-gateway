@@ -5,23 +5,22 @@ declare namespace fastgateway {
 
   type Method = 'GET' | 'DELETE' | 'PATCH' | 'POST' | 'PUT' | 'HEAD' | 'OPTIONS' | 'TRACE';
 
-  interface LambdaProxy {
-    region?: string;
-    target?: string;
-  }
-
   interface Docs {
     name: string;
     endpoint: string;
     type: string;
   }
 
+  interface ProxyFactoryOpts {
+    proxyType: string;
+    opts: {};
+    route: Route;
+  }
+
   interface Route {
     proxyType?: Type;
-    fastProxy?: {};
-    lambdaProxy?: LambdaProxy;
+    proxyConfig?: {};
     proxyHandler?: Function;
-    http2?: boolean;
     pathRegex?: string;
     timeout?: number;
     prefix: string;
@@ -30,7 +29,22 @@ declare namespace fastgateway {
     target: string;
     methods?: Method[];
     middlewares?: Function[];
+    urlRewrite?: Function;
     hooks?: Hooks;
+    disableQsOverwrite?: boolean;
+  }
+
+  interface WebSocketRoute {
+    proxyType: 'websocket';
+    proxyConfig?: {}; // https://github.com/faye/faye-websocket-node#initialization-options
+    prefix: string;
+    target: string;
+    subProtocols?: []; // https://github.com/faye/faye-websocket-node#subprotocol-negotiation
+    hooks?: WebSocketHooks;
+  }
+
+  interface WebSocketHooks {
+    onOpen?: (ws: any, searchParams: URLSearchParams) => Promise<void>;
   }
 
   interface Hooks {
@@ -48,12 +62,13 @@ declare namespace fastgateway {
   
   interface Options<P extends restana.Protocol> {
     server?: Object | restana.Service<P> | Express.Application;
+    proxyFactory?: (opts: ProxyFactoryOpts) => Function;
     restana?: {};
     middlewares?: Function[];
     pathRegex?: string;
     timeout?: number;
     targetOverride?: string;
-    routes: Route[];
+    routes: (Route | WebSocketRoute)[];
   }
 }
 

@@ -3,6 +3,8 @@
 const gateway = require('./../index')
 const PORT = process.env.PORT || 8080
 
+var { expressjwt: jwt } = require('express-jwt')
+
 gateway({
   middlewares: [
     require('cors')(),
@@ -24,8 +26,9 @@ gateway({
     prefix: '/admin',
     target: 'http://localhost:3001',
     middlewares: [
-      require('express-jwt')({
-        secret: 'shhhhhhared-secret'
+      jwt({
+        secret: 'shhhhhhared-secret',
+        algorithms: ['HS256']
       })
     ]
   }, {
